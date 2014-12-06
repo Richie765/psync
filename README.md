@@ -37,8 +37,8 @@ Multidirectional sync
 ======================
 Using the `--tag` option it is possible to synchronize the same root to a multitude of other roots
 in any way you desire. You just have to specify a unique `tagname` for each unique
-pair of roots (leg). Using the same `tagname` on different legs will result in unexpected
-syncronization problems.
+pair of roots (leg). Not specifying a `tagname` or using the same `tagname` on different legs 
+will result in unexpected syncronization problems.
 
 
 Metadata
