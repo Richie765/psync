@@ -60,12 +60,12 @@ Synchronize a local root with a remote root
 
 Synchronize two remote roots
 
-    psync user@remote:/home/user/root1 user@remote:/home/user/root2
+    psync user@remote1:/home/user/root user@remote2:/home/user/root
 
 Three-way sync
 
-    psync --tag leg1 /home/user/root user@remote:/home/user/root1
-    psync --tag leg2 /home/user/root user@remote:/home/user/root2
+    psync --tag leg1 /home/user/root user@remote1:/home/user/root
+    psync --tag leg2 /home/user/root user@remote2:/home/user/root
 
 
 Design Guidelines
