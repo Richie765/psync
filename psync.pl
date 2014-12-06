@@ -1174,9 +1174,3 @@ sub run {
 }
 
 __END__
-
-Todo:
-* Multi-way sync
-* Handing of directories
-* Preserve timestamp
-* Syncronizing dates
