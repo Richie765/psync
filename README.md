@@ -19,9 +19,16 @@ Two roots are required, all options are optional.
 Simply specify two roots that you need to synchronize. A root can be
 on the local filesystem e.g. `/home/user/path` or remote over ssh e.g. `user@host:/path`
 
+
+Remote syncronization
+=====================
 To synchronize with a remote location, the `psync` script needs to be in the path 
-on the remote system. The name of the script has to be the same as the one used to initiate the 
-sync. I recommend only using SSH Public Key authentication to
+on the remote system. The name of the script must be the same as the one used to initiate the 
+sync.
+
+Keep in mind that when the `psync` script is updated, the remote script also needs to be updated.
+
+I recommend only using SSH Public Key authentication to
 avoid any password interactions. Make sure authentication between the remote systems works
 properly before using `psync`.
 
@@ -81,3 +88,4 @@ TODO and Known issues
 * Conflicts (simultaneous changes in both roots) are not handled by the script. They are just displayed to be handled manually directly on the filesystem.
 * Eventhough `psync` is reasonably fast, it was not built for speed or efficiency rather it was made to be simple and reliable.
 * Remove more module dependencies.
+* Build in check to ensure local and remote `psync` scripts are compatible.
