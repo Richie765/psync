@@ -16,7 +16,7 @@ psync [-dv] [options] <root_1> <root_2>
 
 Two roots are required, all options are optional.
 
-Simply specify 2 roots that you need to synchronize. A root can be
+Simply specify two roots that you need to synchronize. A root can be
 on the local filesystem e.g. `/home/user/path` or remote over ssh e.g. `user@host:/path`
 
 To synchronize with a remote location, the `psync` script needs to be in the path 
@@ -44,15 +44,19 @@ in the same `.psync` folder.
 Examples
 ========
 Just synchronize two roots on localhost
+
     psync /home/user/root1 /home/user/root2
 
 Synchronize a local root with a remote root
+
     psync /home/user/root1 user@remote:/home/user/root
 
 Synchronize two remote roots
+
     psync user@remote:/home/user/root1 user@remote:/home/user/root2
 
 Three-way sync
+
     psync --tag leg1 /home/user/root user@remote:/home/user/root1
     psync --tag leg2 /home/user/root user@remote:/home/user/root2
 
