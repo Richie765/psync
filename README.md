@@ -49,7 +49,7 @@ Just synchronize two roots on localhost
 
 Synchronize a local root with a remote root
 
-    psync /home/user/root1 user@remote:/home/user/root
+    psync /home/user/root user@remote:/home/user/root
 
 Synchronize two remote roots
 
@@ -68,7 +68,7 @@ when submitting pull-requests.
 
 * The script should be a single file so it can be copied to other systems easily.
 * The module dependencies should be kept low, only core and a few non-exotic modules are used.
-* It should work with most Perl versions commonly in use
+* It should work with most Perl versions commonly in use (currently v5.10 is required)
 
 
 TODO and Known issues
@@ -80,3 +80,4 @@ TODO and Known issues
 * Improve code documentation
 * Conflicts (simultaneous changes in both roots) are not handled by the script. They are just displayed to be handled manually directly on the filesystem.
 * Eventhough `psync` is reasonably fast, it was not built for speed or efficiency rather it was made to be simple and reliable.
+* Remove more module dependencies.
