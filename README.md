@@ -90,8 +90,10 @@ when submitting pull-requests.
 * It should work with most Perl versions commonly in use (currently v5.10 is required)
 
 
-TODO and Known issues
+TODO and Known Issues
 =====================
+`psync` has been working for me without problems for about a year now so it should be fairly stable.
+
 * Only works on *NIX (only tested on OS X)
 * Empty directories and deleted directories are not syncronized. Directories are only created when needed to copy a file.
 * Timestamps are not preserved or synchronized
