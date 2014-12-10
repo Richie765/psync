@@ -102,4 +102,4 @@ TODO and Known issues
 * Remove more module dependencies.
 * Build in check to ensure local and remote `psync` scripts are compatible.
 * Improve readability of the script output.
-* A temp file (in the format .<filename>.<number>) could be left behind under certain situations, probably when psync is interrupted during a transfer.
+* A temp file (in the format `.<filename>.<number>`) could be left behind under certain situations, probably when psync is interrupted during a transfer.
