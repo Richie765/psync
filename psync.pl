@@ -70,6 +70,8 @@ sub usage_error {
 }
 
 sub main {
+    $|++;   # Flush output after each write
+
     my $usage_desc = "$0 %o <some-arg>";
     if (main->can('usage_desc')) {
         $usage_desc = usage_desc();
@@ -1100,8 +1102,6 @@ sub cmd_recv {
 
 sub run {
     my ($opt, $args) = @_;
-
-    $|++;
 
     # Verify the root
 
