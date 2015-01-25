@@ -100,7 +100,7 @@ our $debug;
 our $bytes = 0;
 
 sub spawn_helper {
-    # Spawns a remote psync helper
+    # Spawns a helper process, through ssh if needed
 
     my ($tree) = @_;
 
@@ -503,6 +503,23 @@ sub copy_files {
             push @copylist_0, $filename;
         }
         elsif($state0 eq 'unchanged' && $state1 eq 'changed') {
+            push @copylist_1, $filename;
+        }
+
+        # Following 4 cases are for example possible when one of the roots
+        # is completely emptied, and then reset with a new sync.
+        # I guess is's just fine to handle them here.
+
+        elsif($state0 eq 'changed' && $state1 eq 'none') {
+            push @copylist_0, $filename;
+        }
+        elsif($state0 eq 'none' && $state1 eq 'changed') {
+            push @copylist_1, $filename;
+        }
+        elsif($state0 eq 'unchanged' && $state1 eq 'none') {
+            push @copylist_0, $filename;
+        }
+        elsif($state0 eq 'none' && $state1 eq 'unchanged') {
             push @copylist_1, $filename;
         }
     }
