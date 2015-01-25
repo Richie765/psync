@@ -632,7 +632,7 @@ sub run {
 
     # Spawn 2 helpers
 
-    local $SIG{PIPE} = sub { say STDERR "SIGPIPE"; exit;  };
+    local $SIG{PIPE} = sub { say STDERR "Error on remote server."; exit 1; };
     $helpers->[0] = spawn_helper($args->[0]);
     result(0);
     $helpers->[1] = spawn_helper($args->[1]);
@@ -1098,13 +1098,13 @@ sub run {
     $tag = $opt->{tag};
 
     if(!$root) {
-        say "ERROR Root not set $root";
-        return 0;
+        say STDERR "ERROR Root not set $root";
+        exit 1;
     }
 
     if(!-d $root) {
-        say "ERROR Root dir not found $root";
-        return 0;
+        say STDERR "ERROR Root dir not found $root";
+        exit 1;
     }
 
     # Determine State Directory
@@ -1123,12 +1123,12 @@ sub run {
             for my $diag (@$error) {
                 my ($file, $message) = %$diag;
                 if ($file eq '') {
-                    say "ERROR general error: $message";
-                    return 0;
+                    say STDERR "ERROR general error: $message";
+                    exit 1;
                 }
                 else {
-                    say "ERROR problem unlinking $file: $message";
-                    return 0;
+                    say STDERR "ERROR problem unlinking $file: $message";
+                    exit 1;
                 }
             }
         }
