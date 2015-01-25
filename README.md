@@ -95,13 +95,12 @@ TODO and Known Issues
 `psync` has been working for me without problems for about a year now so it should be fairly stable.
 
 * Only works on *NIX (only tested on OS X)
-* Empty directories and deleted directories are not syncronized. Directories are only created when needed to copy a file.
+* Empty directories and deleted directories are not syncronized. Directories are only created when needed to copy a file and never deleted.
 * Timestamps are not preserved or synchronized
-* Possibly implement better multidirectional sync, probably as a separate script
+* Possibly implement multidirectional (more then 2 roots) sync, probably as a separate script
 * Improve code documentation
 * Conflicts (simultaneous changes in both roots) are not handled by the script. They are just displayed to be handled manually directly on the filesystem.
 * Eventhough `psync` is reasonably fast, it was not built for speed or efficiency rather it was made to be simple and reliable.
-* Remove more module dependencies.
 * Build in check to ensure local and remote `psync` scripts are compatible.
 * Improve readability of the script output.
 * A temp file (in the format `.<filename>.<number>`) could be left behind under certain situations, probably when psync is interrupted during a transfer.
