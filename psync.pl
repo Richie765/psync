@@ -79,7 +79,7 @@ sub main {
 }
 
 ##
-## SYNC
+## SYNC - This package does the actual syncing work
 ##
 
 package Sync;
@@ -100,7 +100,9 @@ our $debug;
 our $bytes = 0;
 
 sub spawn_helper {
-    my $tree = shift;
+    # Spawns a remote psync helper
+
+    my ($tree) = @_;
 
     my ($host, $root) = $tree =~ /^(?:(.*):)?(.*)$/;
     
@@ -134,11 +136,13 @@ sub spawn_helper {
 }
 
 sub command {
-    my ($helper, $line) = @_;
+    # Sends a command to a remote helper and returns true if successful
+
+    my ($helper, $command) = @_;
 
     my $wtr = $helpers->[$helper]->{wtr};
 
-    say $wtr $line;
+    say $wtr $command;
     #say STDERR $line if $debug;
 
     return result($helper);
@@ -147,6 +151,8 @@ sub command {
 my $last_result;
 
 sub result {
+    # Read result from a helper, return true if ok
+
     my ($helper) = @_;
 
     my $rdr = $helpers->[$helper]->{rdr};
@@ -174,9 +180,10 @@ sub result {
 }
 
 sub get_lines {
-    my $helper = shift;
+    # Reads multiple lines from the remote helper, stops when a blank line is received
 
-    my $wtr = $helpers->[$helper]->{wtr};
+    my ($helper) = @_;
+
     my $rdr = $helpers->[$helper]->{rdr};
 
     my @lines;
@@ -191,31 +198,36 @@ sub get_lines {
 }
 
 sub parse_diff {
-    my $list = shift;
+    # Parses the diff lines into an array of hash
+
+    my ($list) = @_;
 
     my @diff;
 
     for my $line (@$list) {
         my ($state, $size, $date, $filename) = $line =~ /^(\w+),(\d+),(\d+),(.*)$/;
-        push @diff,
-            {
+        push @diff, {
             state => $state,
             size => $size,
             date => $date,
             filename => $filename,
-            };
+        };
     }
     return \@diff;
 }
 
 sub get_diff {
-    my $helper = shift;
+    # Receive diff from helper, parse and return
+
+    my ($helper) = @_;
 
     my @lines = get_lines($helper);
     return parse_diff(\@lines);
 }
 
 sub merge_diffs {
+    # Merge two diffs into one structure, index by filename
+
     my ($diff0, $diff1) = @_;
 
     my $merged;
@@ -240,6 +252,8 @@ sub merge_diffs {
 }
 
 sub unchanged_files {
+    # Skip files that are unchanged on both sides
+
     my ($merged) = @_;
 
     for my $filename (keys %$merged) {
@@ -255,6 +269,8 @@ sub unchanged_files {
 }
 
 sub delete_list {
+    # Delete the specified list of files, both on the source and destination
+
     my ($merged, $list, $src, $dst) = @_;
 
     my $src_root = $helpers->[$src]->{root};
@@ -281,6 +297,8 @@ sub delete_list {
 }
 
 sub deleted_files {
+    # Create a list of files that need to be deleted, then delete them
+
     my ($merged) = @_;
 
     my @delete_list_0;
@@ -307,6 +325,8 @@ sub deleted_files {
 
 sub copy_list_local {
     # Copy a list of files that are both local
+    # NOTE Currently not used - still useful?
+
     my ($merged, $list, $src, $dst) = @_;
 
     my $src_root = $helpers->[$src]->{root};
@@ -422,6 +442,8 @@ sub copy_list {
         }
         say "COPY Finished" if $debug;
         
+        # TODO Make verification optional through a command-line switch
+
         # Verify files
 
         if (!command(0, "HASH $filename")) {
@@ -459,6 +481,8 @@ sub copy_list {
 }
 
 sub copy_files {
+    # Create a list of files that need to be copied, then copy them
+
     my ($merged) = @_;
 
     my @copylist_0;  # copy 0 -> 1
@@ -491,6 +515,7 @@ sub copy_files {
 
 sub equal_list_local {
     # Compare a list of tiles that are both local
+    # NOTE Currently not used, still useful?
     
     my ($merged, $list) = @_;
 
@@ -530,6 +555,8 @@ sub equal_list_local {
 
 sub equal_list {
     # Compare a list of files with the use of Helper
+    # If the files are equal, remove from $merged hash and notify
+    # both sides.
     
     my ($merged, $list) = @_;
 
@@ -582,6 +609,8 @@ sub equal_list {
 }
 
 sub equal_files {
+    # Create a list of files that might be equal, then compare their hashes
+
     my ($merged) = @_;
 
     my @equal_list;
@@ -609,6 +638,8 @@ sub equal_files {
 }
 
 sub conflict_files {
+    # Everything that remains is a conflict, show a list
+
     my ($merged) = @_;
 
     for my $filename (keys %$merged) {
@@ -630,7 +661,7 @@ sub run {
     $tag = $opt->{tag};
     $bytes = 0;
 
-    # Spawn 2 helpers
+    # Spawn helpers for both sides
 
     local $SIG{PIPE} = sub { say STDERR "Error on remote server."; exit 1; };
     $helpers->[0] = spawn_helper($args->[0]);
@@ -646,14 +677,11 @@ sub run {
     my $diff0 = get_diff(0);
     my $diff1 = get_diff(1);
 
-    #print Dumper($diff0);
-    #print Dumper($diff1);
-    #exit;
+    # Merge both diffs into a single structure
 
     my $merged = merge_diffs($diff0, $diff1);
     
-    #conflict_files($merged);    
-
+    # Skip unchanged files
 
     unchanged_files($merged);
 
@@ -661,15 +689,13 @@ sub run {
         say "Nothing to do." if $verbose;
     }
 
-    #print Dumper($merged);
-
     # Process files
 
     deleted_files($merged);
     copy_files($merged);
     equal_files($merged);
 
-    # 
+    # Show conflicts
     
     if (! %$merged) {
         #say "All changes merged.";
@@ -678,7 +704,6 @@ sub run {
         conflict_files($merged);    
     }
     
-
     # Quit helper processes
 
     command(0, "QUIT") || die;
