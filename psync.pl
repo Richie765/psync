@@ -1,93 +1,82 @@
 #!/usr/bin/env perl
 #!/usr/bin/perl
 
+## no critic (Modules::ProhibitMultiplePackages)
+
 use v5.10.0;
 use strict;
 use warnings;
 no if $] >= 5.018, warnings => "experimental::smartmatch";
 use Data::Dumper;
-## no critic (Modules::ProhibitMultiplePackages)
 
-use Getopt::Long::Descriptive;
+use Getopt::Long;
 
-sub usage_desc {
-    return "$0 %o <root_1> <root_2>";
+sub usage {
+    print << "EOF"
+Usage: psync [-dv] [long options...] <root_1> <root_2>
+
+    --tag <tagname>  Metadata Tag, optional
+
+    -h --help        Show this help
+    -v --verbose     Verbose
+    -d --debug       Debug output
+
+EOF
 }
-
-sub opt_spec {
-    return (
-        [ "verbose|v", "Verbose" ],
-        [ "debug|d", "Debug output" ],
-        [ "tag=s", "<tagname> Metadata Tag" ],
-
-        # Helper related parameters
-
-        [ "helper", "Helper" ],
-        [ "passcode=s", "Passcode" ],
-        [ "root=s", "Helper root" ],
-
-    );
-}
-
-sub validate_args {
-    my ($opt, $args) = @_;
-
-    if ($opt->helper) {
-        usage_error("No options allowed") if @$args;
-        usage_error("Don't use helper mode") if ($opt->passcode ne "dontrunyourself");
-    }
-    else {
-        usage_error("Need to specify two roots") unless @$args == 2;
-    }
-    
-    return;
-}
-
-sub run {
-    my ($opt, $args) = @_;
-
-    if ($opt->helper) {
-        Helper::run($opt, $args);
-    }
-    else {
-        Sync::run($opt, $args);
-    }
-    
-    return;
-}
-
-##
-##
-##
-
-my $usage;
 
 sub usage_error {
     my $msg = shift;
+
     say STDERR $msg;
-    say $usage;
+    usage();
+
     exit 1;
 }
 
 sub main {
-    $|++;   # Flush output after each write
+    # Get arguments
 
-    my $usage_desc = "$0 %o <some-arg>";
-    if (main->can('usage_desc')) {
-        $usage_desc = usage_desc();
+    my $opt = {};
+
+    GetOptions ($opt,
+        "help|h",
+        "verbose|v",
+        "debug|d",
+        "tag=s",
+
+        # Helper related parameters
+
+        "helper",
+        "passcode=s",
+        "root=s"
+    ) or usage_error("Error in command line arguments");
+
+    if($opt->{help}) {
+        usage();
+        exit;
     }
 
-    my @opt_spec = opt_spec();
-    my $opt;
+    # Validate Arguments
 
-    ($opt, $usage) = describe_options($usage_desc,@opt_spec,);
-    validate_args($opt, \@ARGV);
-    run($opt, \@ARGV);
+    if ($opt->{helper}) {
+        usage_error("No options allowed") if @ARGV;
+        usage_error("Don't use helper mode") if (!$opt->{passcode} || $opt->{passcode} ne "dontrunyourself");
+    }
+    else {
+        usage_error("Need to specify two roots") unless @ARGV == 2;
+    }
+
+    # Run
+
+    if ($opt->{helper}) {
+        Helper::run($opt, \@ARGV);
+    }
+    else {
+        Sync::run($opt, \@ARGV);
+    }
     
     return;
 }
-
-main();
 
 ##
 ## SYNC
@@ -636,9 +625,9 @@ sub conflict_files {
 sub run {
     my ($opt, $args) = @_;
 
-    $verbose = $opt->verbose;
-    $debug = $opt->debug;
-    $tag = $opt->tag;
+    $verbose = $opt->{verbose};
+    $debug = $opt->{debug};
+    $tag = $opt->{tag};
     $bytes = 0;
 
     # Spawn 2 helpers
@@ -1105,8 +1094,8 @@ sub run {
 
     # Verify the root
 
-    $root = $opt->root;
-    $tag = $opt->tag;
+    $root = $opt->{root};
+    $tag = $opt->{tag};
 
     if(!$root) {
         say "ERROR Root not set $root";
@@ -1172,5 +1161,8 @@ sub run {
     
     return;
 }
+
+$|++;   # Flush output after each write
+main::main();
 
 __END__
