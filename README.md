@@ -96,6 +96,7 @@ TODO and Known Issues
 
 * Only works on *NIX (only tested on OS X)
 * Empty directories and deleted directories are not syncronized. Directories are only created when needed to copy a file and never deleted.
+* When a session is termiated, it leaves a temp file with will be synced during the next sync
 * Timestamps are not preserved or synchronized
 * Possibly implement multidirectional (more then 2 roots) sync, probably as a separate script
 * Improve code documentation

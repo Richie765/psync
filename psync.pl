@@ -386,6 +386,7 @@ sub copy_list {
     my $dst_root = $helpers->[$dst]->{root};
 
     for my $filename (sort @$list) {
+        say "cp $src_root/$filename $dst_root/$filename" if $verbose;
 
         # Transfer the file
         
@@ -473,8 +474,6 @@ sub copy_list {
         command($src, "ADD $filename") || die;
         command($dst, "ADD $filename") || die;
         delete $merged->{$filename};
-        
-        say "cp $src_root/$filename $dst_root/$filename" if $verbose;
     }
     
     return;
@@ -723,6 +722,8 @@ sub run {
     
     # Quit helper processes
 
+    say "Finishing up" if $debug;
+
     command(0, "QUIT") || die;
     command(1, "QUIT") || die;
 
@@ -760,9 +761,13 @@ our $debug;
 our $state_dir;
 
 sub get_last {
-    # Returs the previous state as a hash
-    #   The key is the filename
-    #   Each element contains { size, date }
+    # Get list of files at time of last sync.
+    # NOTE: If added and/or deleted state files exist, they will be merged into state and deleted
+    #
+    # Usage
+    #   my $last = get_last();
+    # Returns
+    #   $last->{filename} -> { size, data }
     
     my $list;
     my $added;
@@ -776,11 +781,10 @@ sub get_last {
         last if !defined $line;
 
         my ($size, $date, $filename) = $line =~ /^(\d+),(\d+),(.*)$/;
-        $list->{$filename} =
-            {
+        $list->{$filename} = {
             size => $size,
             date => $date,
-            };
+        };
     }
     
     # Merge added if exists
@@ -840,9 +844,12 @@ sub get_last {
 }
 
 sub get_current {
-    # Returs the current state as a hash
-    #   The key is the filename
-    #   Each element contains { size, date }
+    # Get the current list of files.
+    #
+    # Usage
+    #   my $current = get_current();
+    # Returns
+    #   $current->{filename} -> { size, data }
 
     my $list;
 
@@ -876,12 +883,22 @@ sub get_current {
 }
 
 sub cmd_getdiff {
+    # Output the diff files since the last sync
+    # Each line is in the following format:
+    #
+    # $state,$size,$date,$filename
+    #
+    # $state is one of: new, deleted, changed, unchanged
+    #
+    # The list will be preceeded by a line with "OK" and terminated by a blank line.
+    #
+    # Usage:
+    #   cmd_diff();
+
     my $last = get_last();
     my $current = get_current();
+
     my @list;
-
-    # new, deleted, changed, unchanged
-
 
     # Walk through current
 
@@ -890,6 +907,7 @@ sub cmd_getdiff {
         my $last_item = $last->{$filename};
         
         my $state;
+
         if(!defined $last_item) {
             $state = "new";
         }
@@ -905,6 +923,7 @@ sub cmd_getdiff {
         
         $item->{filename} = $filename;
         $item->{state} = $state;
+
         push @list, $item;
     }
 
@@ -914,10 +933,10 @@ sub cmd_getdiff {
         my $item = $last->{$filename};
         my $current_item = $current->{$filename};
         
-        my $state;
         if(!defined $current_item) {
             $item->{filename} = $filename;
             $item->{state} = "deleted";
+
             push @list, $item;
         }
     }
@@ -927,14 +946,14 @@ sub cmd_getdiff {
     say "OK";
 
     for my $item (@list) {
-        my $filename = $item->{filename};
+        my $state = $item->{state};
         my $size = $item->{size};
         my $date = $item->{date};
-        my $state = $item->{state};
+        my $filename = $item->{filename};
 
         my $line = "$state,$size,$date,$filename";
+
         say $line;
-        #say STDERR $line;
     }
 
     say "";
@@ -943,7 +962,15 @@ sub cmd_getdiff {
 }
 
 sub cmd_add {
-    my $filename = shift;
+    # Add a line of information of the specified file into the 'added' state file
+    # The information has the following format:
+    #
+    # $size,$date,$filename
+    #
+    # Usage:
+    #   cmd_add($filename);
+
+    my ($filename) = @_;
         
     # Get file information
     
@@ -951,12 +978,12 @@ sub cmd_add {
     
     my $size = -s $full_filename;
     my $date = ( stat $full_filename )[9];
+
+    my $line = "$size,$date,$filename";
     
     # Output to state directory
     
     open my $out, ">>", "$state_dir/added";
-    my $line = "$size,$date,$filename";
-    #say STDERR $line;
     say $out $line;
     close $out;
 
@@ -966,7 +993,12 @@ sub cmd_add {
 }
 
 sub cmd_unlink {
-    my $filename = shift;
+    # Unlink the a file.
+    #
+    # Usage:
+    #   cmd_unlink($filename);
+
+    my ($filename) = @_;
 
     my $result = unlink "$root/$filename";
     
@@ -981,13 +1013,21 @@ sub cmd_unlink {
 }
 
 sub cmd_delete {
-    my $filename = shift;
+    # Add a line of information of the specified deleted file into the 'deleted' state file
+    # The information has the following format:
+    #
+    # $filename
+    #
+    # Usage:
+    #   cmd_delete($filename);
+
+    my ($filename) = @_;
+
+    my $line = "$filename";
         
     # Output to state directory
     
     open my $out, ">>", "$state_dir/deleted";
-    my $line = "$filename";
-    #say STDERR $line;
     say $out $line;
     close $out;
 
@@ -997,8 +1037,12 @@ sub cmd_delete {
 }
 
 sub cmd_hash {
-    my $filename = shift;
+    # Returns a SHA512 digest of a file.
+    #
+    # Usage:
+    #   cmd_hash($filename);
 
+    my ($filename) = @_;
 
     my $alg = 512;
     my $sha = Digest::SHA->new($alg);
@@ -1011,14 +1055,23 @@ sub cmd_hash {
 }
 
 sub cmd_send {
-    my $filename = shift;
+    # Send the specified file.
+    #
+    # Usage:
+    #   cmd_send($filename);
+
+    my ($filename) = @_;
 
     #$debug = 1;
 
     my $size = -s "$root/$filename";
     
-    open my $file, "<", "$root/$filename" ## no critic (InputOutput::RequireBriefOpen)
-        or die "Cannout open $root/$filename for reading: $!";
+    open my $file, "<", "$root/$filename"; ## no critic (InputOutput::RequireBriefOpen)
+
+    if(!$file) {
+        say "ERROR Cannot open $root/$filename for reading: $!";
+        return;
+    }
     
     say "OK $size";
     #sleep 1;
@@ -1051,12 +1104,15 @@ sub cmd_send {
 }
 
 sub cmd_recv {
-    my $param = shift;
+    # Receive the specified file. The path will be created if needed.
+    #
+    # Usage:
+    #   cmd_recv($size, $filename);
+
+    my ($size, $filename) = @_;
     
     #$debug = 1;
     
-    my ($size, $filename) = $param =~ /^(\d+),(.*)$/;
-
     # Create destination dir if needed
     #
 
@@ -1068,6 +1124,7 @@ sub cmd_recv {
         if (@$error) {
             for my $diag (@$error) {
                 my ($file, $message) = %$diag;
+
                 if ($file eq '') {
                     say STDERR "Error creating directory $dst_dirname: $message" if $debug;
                 }
@@ -1075,7 +1132,11 @@ sub cmd_recv {
                     say STDERR "Error unlinking $file: $message" if $debug;
                 }
             }
-            say "ERROR Unable to create destinatin directory";
+
+            # TODO Add proper error message
+
+            say "ERROR Unable to create destination directory $dst_dirname";
+            return;
         }
         say STDERR "mkdir $dst_dirname" if $verbose;
     }
@@ -1134,7 +1195,7 @@ sub cmd_recv {
 sub run {
     my ($opt, $args) = @_;
 
-    # Verify the root
+    # Verify the root exists
 
     $root = $opt->{root};
     $tag = $opt->{tag};
@@ -1159,11 +1220,12 @@ sub run {
     if (! -d $state_dir) {
         say STDERR "- mkdir $state_dir" if ($debug);
         
-        make_path($state_dir, {error => \my $error});
+        make_path($state_dir, { error => \my $error });
 
         if (@$error) {
             for my $diag (@$error) {
                 my ($file, $message) = %$diag;
+
                 if ($file eq '') {
                     say STDERR "ERROR general error: $message";
                     exit 1;
@@ -1192,11 +1254,15 @@ sub run {
             when ("QUIT") { say "OK"; last }
             when ("GETDIFF") { cmd_getdiff() }
             when ("ADD") { cmd_add($params); };
-            when ("UNLINK") { cmd_unlink($params); };
-            when ("DELETE") { cmd_delete($params); };
-            when ("HASH") { cmd_hash($params); };
-            when ("SEND") { cmd_send($params); };
-            when ("RECV") { cmd_recv($params); };
+            when ("UNLINK") { cmd_unlink($params); };   # filename
+            when ("DELETE") { cmd_delete($params); };   # filename
+            when ("HASH") { cmd_hash($params); };       # filename
+            when ("SEND") { cmd_send($params); };       # filename
+            when ("RECV") { 
+                my ($size, $filename) = $params =~ /^(\d+),(.*)$/;
+
+                cmd_recv($size, $filename); 
+            };
             default { say "ERROR Unknown command $command" };
         }
     }
