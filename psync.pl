@@ -91,7 +91,6 @@ use File::Compare;
 use File::Copy qw( copy cp );
 use File::Path qw( make_path );
 use IPC::Open2;
-# use IPC::Open3;
 
 our $helpers;
 our $verbose;
@@ -106,21 +105,22 @@ sub spawn_helper {
 
     my ($host, $root) = $tree =~ /^(?:(.*):)?(.*)$/;
     
-    my ($pid, $wtr, $rdr, $err);
+    my ($pid, $wtr, $rdr);
 
     my $app = basename $0;
-    
-    my @opts = ();
+
+    my @opts = ( "--helper", "--passcode=dontrunyourself", "--root=$root" );
+
     if($tag) {
         push @opts, "--tag", $tag;
     }
     
     if ($host) {
         say "Connecting to remote host: $host" if($verbose);
-        $pid = open2($rdr, $wtr, "ssh", $host, $app, "--helper", "--passcode=dontrunyourself", "--root=$root", @opts);
+        $pid = open2($rdr, $wtr, "ssh", $host, $app, @opts);
     }   
     else {
-        $pid = open2($rdr, $wtr, $app, "--helper", "--passcode=dontrunyourself", "--root=$root", @opts);
+        $pid = open2($rdr, $wtr, $app, @opts);
     } 
 
     return {
@@ -129,7 +129,6 @@ sub spawn_helper {
         pid => $pid,
         wtr => $wtr,
         rdr => $rdr,
-        err => $err,
     };
 }
 
@@ -639,7 +638,7 @@ sub compare_list {
                 # Files are equal
                 command(0, "ADD $filename") || die;
                 command(1, "ADD $filename") || die;
-                
+
                 delete $merged->{$filename};
             }
         }
