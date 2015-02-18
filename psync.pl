@@ -155,6 +155,8 @@ sub result {
     my $rdr = $helpers->[$helper]->{rdr};
 
     my $line = <$rdr>;
+    die "Got no result, connection lost?" if(!defined($line)); # not caught by autodie
+
     chomp $line;
 
     #say STDERR $line if $debug;
@@ -187,11 +189,11 @@ sub get_lines {
 
     while (my $line = <$rdr>) {
         chomp $line;
-        last if $line eq '';
+        return @lines if $line eq '';
         push @lines, $line;
     }
 
-    return @lines;
+    die "Unexpected end of input, connection lost?"; # not caught by autodie
 }
 
 sub parse_diff {
@@ -248,9 +250,9 @@ sub merge_diffs {
     return $merged;
 }
 
-sub root_name {
+sub rootname {
     # Usage:
-    #   my $root_name = root_name($root);
+    #   my $rootname = rootname($root);
     #
     # Returns
     #   A string like: root_1 (for $root == 0)
@@ -282,11 +284,12 @@ sub delete_list {
 
     my ($merged, $list, $src, $dst) = @_;
 
-    my $src_root = $helpers->[$src]->{root};
+    my $src_rootname = rootname($src);
 
-    #say "Delete from $src_root";
+    say "Deleting from $src_rootname" if $verbose;
     
     for my $filename (sort @$list) {
+        say "- delete $filename" if $verbose;
 
         # delete the file
         
@@ -296,12 +299,12 @@ sub delete_list {
             command($src, "DELETE $filename") || die;
             command($dst, "DELETE $filename") || die;
             delete $merged->{$filename};
-            say "rm $src_root/$filename" if $verbose;
         }
         else {
-            say STDERR "Error deleting $src_root/$filename: $!";
+            say STDERR "- Error deleting $filename";
         }
     }
+
     return;
 }
 
@@ -394,8 +397,13 @@ sub copy_list {
     my $src_root = $helpers->[$src]->{root};
     my $dst_root = $helpers->[$dst]->{root};
 
+    my $src_rootname = rootname($src);
+    my $dst_rootname = rootname($dst);
+    
+    say "Copying files: $src_rootname -> $dst_rootname" if $verbose;
+
     for my $filename (sort @$list) {
-        say "cp $src_root/$filename $dst_root/$filename" if $verbose;
+        say "- copy $filename" if $verbose;
 
         # Transfer the file
         
@@ -407,7 +415,7 @@ sub copy_list {
         
         say "transfer $filename" if $debug;
 
-        say "Initating SEND" if $debug;
+        say "Initiating SEND" if $debug;
 
         if (!command($src, "SEND $filename")) {
             say STDERR "Error sending file $src_root/$filename: $last_result";
@@ -418,7 +426,7 @@ sub copy_list {
         }
         my $size = $last_result;
         
-        say "Initating RECV" if $debug;
+        say "Initiating RECV" if $debug;
 
         if (!command($dst, "RECV $size,$filename")) {
             say STDERR "Error receiving file $dst_root/$filename: $last_result";
@@ -438,13 +446,15 @@ sub copy_list {
         
         while($size) {
             $blocksize = $size if ($blocksize > $size);
-            #$size -= sysread($in, $buffer , $blocksize);
-            #$amount = sysread($in, $buffer , $blocksize);
+
             $amount = read($in, $buffer, $blocksize);
-            #print "COPY: data: $buffer" if $debug;
+            die "Read Error" if(! defined($amount));
+
             say "COPY LEN: " . length($buffer) . " amount: $amount" if $debug;
-            #syswrite $out, $buffer;
-            print $out $buffer;
+
+            my $result = print $out $buffer;
+            die "Write Error" if(!$result); # autodie doesn't work with print
+
             $size -= $amount;
             $bytes += $amount;
             #say "COPY $amount bytes transferred, $size bytes left";
@@ -702,7 +712,7 @@ sub run {
 
     # Spawn helpers for both sides
 
-    local $SIG{PIPE} = sub { say STDERR "Error on remote server."; exit 1; };
+    local $SIG{PIPE} = sub { say STDERR "Connection to remote lost."; exit 1; };
     $helpers->[0] = spawn_helper($args->[0]);
     result(0);
     $helpers->[1] = spawn_helper($args->[1]);
@@ -1113,11 +1123,14 @@ sub cmd_send {
     
     while ($size) {
         $blocksize = $size if ($blocksize > $size);
-        #$amount = sysread($file, $buffer, $blocksize);
+
         $amount = read($file, $buffer, $blocksize);
+        die "Read Error" if(! defined $amount);
         say STDERR "SEND: LEN: " . length($buffer) if $debug;
-        #syswrite(STDOUT, $buffer);
-        print $buffer;
+
+        my $result = print $buffer;
+        die "Write Error" if(!$result); # autodie doesn't work with print
+
         $size -= $amount;
         say STDERR "SEND: $amount bytes transferred, $size bytes left" if $debug; 
     }
@@ -1191,10 +1204,15 @@ sub cmd_recv {
     
     while ($size) {
         $blocksize = $size if ($blocksize > $size);
-        #my $amount = sysread(STDIN, $buffer, $blocksize);
+
         my $amount = read(STDIN, $buffer, $blocksize);
+        die "Read Error" if(! defined($amount));
+
         $size -= $amount;
-        print $file $buffer;
+
+        my $result = print $file $buffer;
+        die "Write Error" if(!$result); # autodie doesn't work with print
+
         say STDERR "RECV: $size bytes left $amount bytes received" if $debug; 
     }
     
@@ -1277,7 +1295,7 @@ sub run {
         $debug = 0;
 
         given (uc $command) {
-            when ("QUIT") { say "OK"; last }
+            when ("QUIT") { say "OK"; return; }
             when ("GETDIFF") { cmd_getdiff() }
             when ("ADD") { cmd_add($params); };
             when ("UNLINK") { cmd_unlink($params); };   # filename
@@ -1292,6 +1310,8 @@ sub run {
             default { say "ERROR Unknown command $command" };
         }
     }
+
+    say STDERR "Unexpected End of Input, terminating helper"; # not caught by autodie
     
     return;
 }
