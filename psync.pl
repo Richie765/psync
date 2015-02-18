@@ -294,7 +294,7 @@ sub delete_list {
     return;
 }
 
-sub deleted_files {
+sub delete_files {
     # Create a list of files that need to be deleted, then delete them
 
     my ($merged) = @_;
@@ -527,7 +527,7 @@ sub copy_files {
     return;
 }
 
-sub equal_list_local {
+sub compare_list_local {
     # Compare a list of tiles that are both local
     # NOTE Currently not used, still useful?
     
@@ -567,7 +567,7 @@ sub equal_list_local {
     return;
 }
 
-sub equal_list {
+sub compare_list {
     # Compare a list of files with the use of Helper
     # If the files are equal, remove from $merged hash and notify
     # both sides.
@@ -622,12 +622,12 @@ sub equal_list {
     return;
 }
 
-sub equal_files {
-    # Create a list of files that might be equal, then compare their hashes
+sub compare_files {
+    # Create a list of files that might be equal and need to be compared
 
     my ($merged) = @_;
 
-    my @equal_list;
+    my @compare_list;
 
     for my $filename (keys %$merged) {
         my $item = $merged->{$filename};
@@ -639,14 +639,14 @@ sub equal_files {
         next if ($size0 != $size1);
 
         if($state0 eq 'new' && $state1 eq 'new') {
-            push @equal_list, $filename;
+            push @compare_list, $filename;
         }
         elsif($state0 eq 'changed' && $state1 eq 'changed') {
-            push @equal_list, $filename;
+            push @compare_list, $filename;
         }
     }
 
-    equal_list($merged, \@equal_list) if(@equal_list);
+    compare_list($merged, \@compare_list) if(@compare_list);
     
     return;
 }
@@ -705,9 +705,9 @@ sub run {
 
     # Process files
 
-    deleted_files($merged);
+    delete_files($merged);
     copy_files($merged);
-    equal_files($merged);
+    compare_files($merged);
 
     # Show conflicts
     
