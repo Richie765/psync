@@ -249,6 +249,18 @@ sub merge_diffs {
     return $merged;
 }
 
+sub root_name {
+    # Usage:
+    #   my $root_name = root_name($root);
+    #
+    # Returns
+    #   A string like: root_1 (for $root == 0)
+
+    my ($root) = @_;
+
+    return "root_" . ($root + 1);
+}
+
 sub unchanged_files {
     # Skip files that are unchanged on both sides
 
@@ -527,28 +539,96 @@ sub copy_files {
     return;
 }
 
-sub compare_list_local {
-    # Compare a list of tiles that are both local
-    # NOTE Currently not used, still useful?
+sub compare_file_local {
+    # Compare two files that are both local
+    #
+    # Returns
+    #   -1  - Couldn't compare files
+    #   1   - Files are different
+    #   0   - Files are equal
+    #
+    # TODO Not used yet, implement in compare_list
+    
+    my ($filename, $src, $dst) = @_;
+
+    my $src_root = $helpers->[$src]->{root};
+    my $dst_root = $helpers->[$dst]->{root};
+
+        
+    my $result = compare("$src_root/$filename","$dst_root/$filename");
+
+    if($result == -1) {
+        say STDERR "Couldn't compare $src_root/$filename and $dst_root/$filename: $!";
+    }        
+    
+    return $result;
+}
+
+sub compare_file {
+    # Compare a single file with the use of Helper
+    #
+    # Returns
+    #   -1  - Couldn't compare files
+    #   1   - Files are different
+    #   0   - Files are equal
+    
+    my ($filename, $src, $dst) = @_;
+
+    my $src_root = $helpers->[$src]->{root};
+    my $dst_root = $helpers->[$dst]->{root};
+
+    # Hash $src
+    
+    if (!command($src, "HASH $filename")) {
+        say STDERR "Error hashing $src_root/$filename: $last_result";
+        
+        return -1;
+    }
+    my $src_hash = $last_result;
+    
+    # Hash $dst
+    
+    if (!command($dst, "HASH $filename")) {
+        say STDERR "Error hashing $dst_root/$filename: $last_result";
+        
+        return -1;
+    }        
+    my $dst_hash = $last_result;
+
+    # Check result
+
+    say "$filename: $src_hash $dst_hash" if $debug;
+
+    if ($src_hash ne $dst_hash) {
+        # Different
+        return 1;
+    }
+
+    # Equal
+
+    return 0;
+}
+
+sub compare_list {
+    # Compare a list of files.
+    # If the file is equal, remove from $merged hash and notify both sides.
     
     my ($merged, $list) = @_;
 
-    my $src_root = $helpers->[0]->{root};
-    my $dst_root = $helpers->[1]->{root};
-
-    say "Compare from $src_root to $dst_root" if $verbose;
     for my $filename (sort @$list) {
         # compare the file
-        #
 
-        say "- compare $src_root/$filename $dst_root/$filename" if $verbose;
+        say "comp $filename" if $verbose;
         
-        my $result = compare("$src_root/$filename","$dst_root/$filename");
-        
+        my $result = compare_file($filename, 0, 1);
+
+        # Check result
+
         given ($result) {
             when (-1) { 
-                say STDERR "Error comparing $src_root/$filename and $dst_root/$filename: $!";
-                # Skip them for now 
+                # Couldn't compare, skip it
+                say STDERR "Warning: Skipping file because it couldn't be compared";
+
                 delete $merged->{$filename};
             }
             when (1) {
@@ -559,64 +639,10 @@ sub compare_list_local {
                 # Files are equal
                 command(0, "ADD $filename") || die;
                 command(1, "ADD $filename") || die;
+                
                 delete $merged->{$filename};
             }
         }
-    }
-    
-    return;
-}
-
-sub compare_list {
-    # Compare a list of files with the use of Helper
-    # If the files are equal, remove from $merged hash and notify
-    # both sides.
-    
-    my ($merged, $list) = @_;
-
-    my $src_root = $helpers->[0]->{root};
-    my $dst_root = $helpers->[1]->{root};
-
-    for my $filename (sort @$list) {
-        # compare the file
-
-        say "comp $src_root/$filename $dst_root/$filename" if $verbose;
-        
-        # Hash 0
-        
-        if (!command(0, "HASH $filename")) {
-            say STDERR "Error hashing $src_root/$filename: $last_result";
-            
-            # Skip the file
-            delete $merged->{$filename};
-            next;
-        }        
-        my $hash0 = $last_result;
-        
-        # Hash 1
-        
-        if (!command(1, "HASH $filename")) {
-            say STDERR "Error hashing $dst_root/$filename: $last_result";
-            
-            # Skip the file
-            delete $merged->{$filename};
-            next;
-        }        
-        my $hash1 = $last_result;
-
-        say "$filename: $hash0 $hash1" if $debug;
-
-        # Check results
-
-        if ($hash0 eq $hash1) {
-            command(0, "ADD $filename") || die;
-            command(1, "ADD $filename") || die;
-            delete $merged->{$filename};
-        }
-        else {
-             # Files are different
-             # Do nothing, handle as conflicts 
-        }   
     }
     
     return;
