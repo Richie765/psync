@@ -111,4 +111,4 @@ Internals
 =========
 
 ### Comparing of files
-When a file is changed on both roots and still have an equal length will be compared. A file will also be compared after being copied to ensure its integrety. Comparing is done using a SHA512 digest.
+When a file is changed on both roots and still has an equal size, it will be compared. A file will also be compared after being copied to ensure its integrety. Comparing is done using a SHA512 digest.
