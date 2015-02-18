@@ -8,6 +8,7 @@ use strict;
 use warnings;
 no if $] >= 5.018, warnings => "experimental::smartmatch";
 use Data::Dumper;
+use autodie;
 
 use Getopt::Long;
 
@@ -84,6 +85,7 @@ sub main {
 
 package Sync;
 
+use autodie;
 use Data::Dumper;
 
 use IPC::Open2;
@@ -431,7 +433,7 @@ sub copy_list {
             $blocksize = $size if ($blocksize > $size);
             #$size -= sysread($in, $buffer , $blocksize);
             #$amount = sysread($in, $buffer , $blocksize);
-            $amount = read($in, $buffer , $blocksize);
+            $amount = read($in, $buffer, $blocksize);
             #print "COPY: data: $buffer" if $debug;
             say "COPY LEN: " . length($buffer) . " amount: $amount" if $debug;
             #syswrite $out, $buffer;
@@ -747,6 +749,7 @@ sub run {
 
 package Helper;
 
+use autodie;
 use Data::Dumper;
 
 use File::Find;
@@ -821,14 +824,17 @@ sub get_last {
 
     if($added || $deleted) {
         @lines = ();
+
         for my $filename (sort keys %$list) {
             my $item = $list->{$filename};
             my $size = $item->{size};
             my $date = $item->{date};
             
             my $line = "$size,$date,$filename\n";
+
             push @lines, $line;
         }
+        
         write_file("$state_dir/state", \@lines) || die "Unable to write to $state_dir/state";
         
         if($added) {
