@@ -92,11 +92,10 @@ when submitting pull-requests.
 
 TODO and Known Issues
 =====================
-`psync` has been working for me without problems for about a year now so it should be fairly stable.
+`psync` has been working for me without major problems for over a year so it should be fairly stable.
 
 * Only works on *NIX (only tested on OS X)
 * Empty directories and deleted directories are not syncronized. Directories are only created when needed to copy a file and never deleted.
-* When a session is termiated, it leaves a temp file with will be synced during the next sync
 * Timestamps are not preserved or synchronized
 * Possibly implement multidirectional (more then 2 roots) sync, probably as a separate script
 * Improve code documentation
@@ -104,4 +103,12 @@ TODO and Known Issues
 * Eventhough `psync` is reasonably fast, it was not built for speed or efficiency rather it was made to be simple and reliable.
 * Build in check to ensure local and remote `psync` scripts are compatible.
 * Improve readability of the script output.
-* A temp file (in the format `.<filename>.<number>`) could be left behind under certain situations, probably when psync is interrupted during a transfer.
+* A temp file (in the format `.<filename>.<number>`) could be left behind, probably when psync is interrupted during a transfer. This temp file will be synced on the next run (will be fixed in a while)
+* Implement a lockfile to enforce only one sync at a time
+
+
+Internals
+=========
+
+### Comparing of files
+When a file is changed on both roots and still have an equal length will be compared. A file will also be compared after being copied to ensure its integrety. Comparing is done using a SHA512 digest.
