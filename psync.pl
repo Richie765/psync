@@ -86,12 +86,12 @@ package Sync;
 
 use autodie;
 
-use IPC::Open2;
-use IPC::Open3;
-use File::Copy qw( copy cp );
-use File::Compare;
-use File::Path qw( make_path );
 use File::Basename;
+use File::Compare;
+use File::Copy qw( copy cp );
+use File::Path qw( make_path );
+use IPC::Open2;
+# use IPC::Open3;
 
 our $helpers;
 our $verbose;
@@ -747,11 +747,11 @@ package Helper;
 
 use autodie;
 
+use Digest::SHA;
+use File::Basename;
 use File::Find;
 use File::Path qw( make_path );
 use File::Slurp;
-use Digest::SHA;
-use File::Basename;
 
 our $root;
 our $verbose;
