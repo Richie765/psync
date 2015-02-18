@@ -7,7 +7,6 @@ use v5.10.0;
 use strict;
 use warnings;
 no if $] >= 5.018, warnings => "experimental::smartmatch";
-use Data::Dumper;
 use autodie;
 
 use Getopt::Long;
@@ -86,7 +85,6 @@ sub main {
 package Sync;
 
 use autodie;
-use Data::Dumper;
 
 use IPC::Open2;
 use IPC::Open3;
@@ -124,8 +122,6 @@ sub spawn_helper {
     else {
         $pid = open2($rdr, $wtr, $app, "--helper", "--passcode=dontrunyourself", "--root=$root", @opts);
     } 
-
-    #say Dumper($wtr, $rdr, $err);
 
     return {
         host => $host,
@@ -750,7 +746,6 @@ sub run {
 package Helper;
 
 use autodie;
-use Data::Dumper;
 
 use File::Find;
 use File::Path qw( make_path );
