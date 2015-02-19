@@ -123,6 +123,9 @@ sub spawn_helper {
         $pid = open2($rdr, $wtr, $app, @opts);
     } 
 
+    #binmode $rdr;
+    #binmode $wtr;
+
     return {
         host => $host,
         root => $root,
@@ -140,7 +143,8 @@ sub command {
     my $wtr = $helpers->[$helper]->{wtr};
 
     say $wtr $command;
-    #say STDERR $line if $debug;
+
+    # TODO Check return value say
 
     return result($helper);
 }
@@ -158,8 +162,6 @@ sub result {
     die "Got no result, connection lost?" if(!defined($line)); # not caught by autodie
 
     chomp $line;
-
-    #say STDERR $line if $debug;
 
     my $status;
     
@@ -221,11 +223,12 @@ sub get_diff {
     my ($helper) = @_;
 
     my @lines = get_lines($helper);
+
     return parse_diff(\@lines);
 }
 
 sub merge_diffs {
-    # Merge two diffs into one structure, index by filename
+    # Merge two diffs into one structure, indexed by filename
 
     my ($diff0, $diff1) = @_;
 
@@ -280,7 +283,8 @@ sub unchanged_files {
 }
 
 sub delete_list {
-    # Delete the specified list of files, both on the source and destination
+    # Delete the specified list of files from $src
+    # Then update 'deleted' metadata on both the source and destination
 
     my ($merged, $list, $src, $dst) = @_;
 
@@ -302,6 +306,7 @@ sub delete_list {
         }
         else {
             say STDERR "- Error deleting $filename";
+            delete $merged->{$filename};
         }
     }
 
@@ -335,67 +340,114 @@ sub delete_files {
     return;
 }
 
-sub copy_list_local {
-    # Copy a list of files that are both local
-    # NOTE Currently not used - still useful?
+sub copy_file_local {
+    # Copy a file where src and dst are both local
+    #
+    # Return
+    #   true on success
+    #
+    # TODO Not used yet, implement in copy_list
 
-    my ($merged, $list, $src, $dst) = @_;
+    my ($filename, $src, $dst) = @_;
 
     my $src_root = $helpers->[$src]->{root};
     my $dst_root = $helpers->[$dst]->{root};
-
-    #say "Copy from $src_root to $dst_root";
     
-    for my $filename (sort @$list) {
+    my $dst_path = "$dst_root/$filename";
+    my $dst_dirname = dirname $dst_path;
 
-        # Create destination dir if needed
-        #
+    if (!-d $dst_dirname) {
+        say "make_path $dst_dirname" if $debug;
 
-        my $dst_path = "$dst_root/$filename";
-        my $dst_dirname = dirname $dst_path;
+        make_path($dst_dirname, { error => \my $error });
 
-        if (!-d $dst_dirname) {
-            make_path($dst_dirname, {error => \my $error});
-            if (@$error) {
-                for my $diag (@$error) {
-                    my ($file, $message) = %$diag;
-                    if ($file eq '') {
-                        say STDERR "Error creating directory $dst_dirname: $message";
-                    }
-                    else {
-                        say STDERR "Error unlinking $file: $message";
-                    }
+        if (@$error) {
+            for my $diag (@$error) {
+                my ($file, $message) = %$diag;
+
+                if ($file eq '') {
+                    say STDERR "Error creating directory $dst_dirname: $message";
+                }
+                else {
+                    say STDERR "Error unlinking $file: $message";
                 }
             }
-            say "mkdir $dst_dirname" if $verbose;
-        }
-
-        # copy the file
-        #
-        
-        my $result = cp "$src_root/$filename", "$dst_root/$filename";
-        
-        if($result) {
-            command($src, "ADD $filename") || die;
-            command($dst, "ADD $filename") || die;
-            delete $merged->{$filename};
-            say "cp $src_root/$filename $dst_root/$filename" if $verbose;
-        }
-        else {
-            say STDERR "Error copying file $src_root/$filename to $dst_root/$filename: $!";
         }
     }
+
+    # copy the file
+    #
     
-    return;
+    my $result = cp "$src_root/$filename", "$dst_root/$filename";
+            
+    return $result;
+}
+
+sub copy_file {
+    # Copy a single file with the use of Helper
+    #
+    # Return
+    #   true on success
+    
+    my ($filename, $src, $dst) = @_;
+    
+    ##
+    say "Initiating SEND" if $debug;
+    ##
+
+    if (!command($src, "SEND $filename")) {
+        say STDERR "Initiate SEND failed: $last_result";
+        
+        return;
+    }
+    my $size = $last_result;
+    
+    ##
+    say "Initiating RECV" if $debug;
+    ##
+
+    if (!command($dst, "RECV $size,$filename")) {
+        say STDERR "Initiate RECV failed: $last_result";
+        
+        return;            
+    }
+    
+    ##
+    say "Starting COPY" if $debug;
+    ##
+    
+    my $in = $helpers->[$src]->{rdr} || die;
+    my $out = $helpers->[$dst]->{wtr} || die;
+    
+    my $blocksize = 1024 * 8; # 8kb
+    my $buffer;
+    
+    while($size) {
+        $blocksize = $size if ($blocksize > $size);
+
+        my $amount = read($in, $buffer, $blocksize);
+        die "Read Error" if(! defined($amount));
+
+        my $result = print $out $buffer;
+        die "Write Error" if(!$result); # autodie doesn't work with print
+
+        $size -= $amount;
+        $bytes += $amount;
+
+        say "COPY $size bytes left" if $debug;
+    }
+
+    ##
+    say "COPY Finished" if $debug;
+    ##
+
+    return 1;
 }
 
 sub copy_list {
     # Copy a list of files that may be remote, using the helpers
     
     my ($merged, $list, $src, $dst) = @_;
-
-    my $src_root = $helpers->[$src]->{root};
-    my $dst_root = $helpers->[$dst]->{root};
 
     my $src_rootname = rootname($src);
     my $dst_rootname = rootname($dst);
@@ -407,92 +459,38 @@ sub copy_list {
 
         # Transfer the file
         
-        my $in = $helpers->[$src]->{rdr} || die;
-        my $out = $helpers->[$dst]->{wtr} || die;
-        
-        #binmode $in;
-        #binmode $out;
-        
-        say "transfer $filename" if $debug;
+        copy_file($filename, $src, $dst)
+            || die;
 
-        say "Initiating SEND" if $debug;
+        # Verify file
 
-        if (!command($src, "SEND $filename")) {
-            say STDERR "Error sending file $src_root/$filename: $last_result";
-            
-            # Skip the file
-            delete $merged->{$filename};
-            next;            
-        }
-        my $size = $last_result;
-        
-        say "Initiating RECV" if $debug;
-
-        if (!command($dst, "RECV $size,$filename")) {
-            say STDERR "Error receiving file $dst_root/$filename: $last_result";
-            
-            # TODO: Stop the sender
-            
-            # Skip the file
-            delete $merged->{$filename};
-            next;            
-        }
-        
-        say "COPY Starting" if $debug;
-        
-        my $buffer;
-        my $blocksize = 1024 * 8; # 8kb
-        my $amount;        
-        
-        while($size) {
-            $blocksize = $size if ($blocksize > $size);
-
-            $amount = read($in, $buffer, $blocksize);
-            die "Read Error" if(! defined($amount));
-
-            say "COPY LEN: " . length($buffer) . " amount: $amount" if $debug;
-
-            my $result = print $out $buffer;
-            die "Write Error" if(!$result); # autodie doesn't work with print
-
-            $size -= $amount;
-            $bytes += $amount;
-            #say "COPY $amount bytes transferred, $size bytes left";
-            say "COPY $size bytes left" if $debug;
-        }
-        say "COPY Finished" if $debug;
-        
         # TODO Make verification optional through a command-line switch
 
-        # Verify files
+        my $result = compare_file($filename, $src, $dst);
 
-        if (!command(0, "HASH $filename")) {
-            say STDERR "Error hashing $src_root/$filename: $last_result";
-            next;
-        }        
-        my $hash0 = $last_result;
-        
-        # Hash 1
-        
-        if (!command(1, "HASH $filename")) {
-            say STDERR "Error hashing $dst_root/$filename: $last_result";
-            next;
-        }        
-        my $hash1 = $last_result;
+        # Check result
 
-        if ($hash0 ne $hash1) {
-            say STDERR "Copy failed verification";
-            next;
+        given ($result) {
+            when (-1) { 
+                # Couldn't compare, skip it
+                say STDERR "Warning: Skipping file because it couldn't be compared";
+
+                delete $merged->{$filename};
+            }
+            when (1) {
+                say STDERR "Copy verification failed";
+                return;
+            }
+            when (0) {
+                # Files are equal
+                say "Copy verification succeded" if $debug;
+
+                command($src, "ADD $filename") || die;
+                command($dst, "ADD $filename") || die;
+
+                delete $merged->{$filename};
+            }
         }
-        else {
-            say "Hash verification succeded" if $debug;
-        }
-
-        # Update metadata
-
-        command($src, "ADD $filename") || die;
-        command($dst, "ADD $filename") || die;
-        delete $merged->{$filename};
     }
     
     return;
@@ -691,12 +689,14 @@ sub conflict_files {
 
     my ($merged) = @_;
 
+    say "Conflicts:";
+
     for my $filename (keys %$merged) {
         my $item = $merged->{$filename};
         my $state0 = $item->{item0}->{state} // "none";
         my $state1 = $item->{item1}->{state} // "none";
 
-        say "Conflict: $filename, $state0, $state1" if $verbose;
+        say "- $filename ($state0, $state1)";
     }
     
     return;
@@ -712,7 +712,8 @@ sub run {
 
     # Spawn helpers for both sides
 
-    local $SIG{PIPE} = sub { say STDERR "Connection to remote lost."; exit 1; };
+    local $SIG{PIPE} = sub { say STDERR "Connection to helper lost."; exit 1; };
+
     $helpers->[0] = spawn_helper($args->[0]);
     result(0);
     $helpers->[1] = spawn_helper($args->[1]);
@@ -734,28 +735,29 @@ sub run {
 
     unchanged_files($merged);
 
-    if (! %$merged) {
-        say "Nothing to do." if $verbose;
-    }
-
     # Process files
 
-    delete_files($merged);
-    copy_files($merged);
-    compare_files($merged);
-
-    # Show conflicts
-    
-    if (! %$merged) {
-        #say "All changes merged.";
+    if (%$merged) {
+        delete_files($merged);
+        copy_files($merged);
+        compare_files($merged);
     }
     else {
-        conflict_files($merged);    
+        say "Nothing to do." if $verbose;
     }
     
-    # Quit helper processes
-
-    say "Finishing up" if $debug;
+    # Show conflicts
+    
+    if (%$merged) {
+        conflict_files($merged);    
+    }
+    else {
+        #say "All changes merged.";
+    }
+    
+    ##
+    say "Quitting Helpers" if $debug;
+    ##
 
     command(0, "QUIT") || die;
     command(1, "QUIT") || die;
@@ -764,9 +766,9 @@ sub run {
 
     for my $helper (0..1) {
         waitpid( $helpers->[$helper]->{pid}, 0 );
-        my $exit_status = $? >> 8;
+        # my $exit_status = $? >> 8;
 
-        #say "Exit status helper $helper: $exit_status";
+        # say "Exit status helper $helper: $exit_status";
     }
     
     say "$bytes bytes transferred" if $verbose;
@@ -938,7 +940,7 @@ sub cmd_getdiff {
 
     # Walk through current
 
-    for my $filename (sort keys %$current) {
+    for my $filename (keys %$current) {
         my $item = $current->{$filename};
         my $last_item = $last->{$filename};
         
@@ -965,7 +967,7 @@ sub cmd_getdiff {
 
     # Walk through last
 
-    for my $filename (sort keys %$last) {
+    for my $filename (keys %$last) {
         my $item = $last->{$filename};
         my $current_item = $current->{$filename};
         
@@ -1150,8 +1152,6 @@ sub cmd_recv {
 
     my ($size, $filename) = @_;
     
-    #$debug = 1;
-    
     # Create destination dir if needed
     #
 
@@ -1160,6 +1160,7 @@ sub cmd_recv {
 
     if (!-d $dst_dirname) {
         make_path($dst_dirname, {error => \my $error});
+
         if (@$error) {
             for my $diag (@$error) {
                 my ($file, $message) = %$diag;
